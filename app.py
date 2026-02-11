@@ -1,41 +1,33 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
-# Configure your API key
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+# Configure API key
+client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
 
-# =========================
-# Welcome Section
-# =========================
 st.title("Hello Varshini 💖")
 st.write("My first Streamlit app 🚀")
 
-# =========================
-# Habit Tracker Section
-# =========================
-st.header("StepZen Habit Tracker 🌟")
+st.subheader("🌟 Habit Tracker")
+
 habit = st.text_input("Enter a habit")
+
 if st.button("Add Habit"):
     if habit:
-        st.success(f"{habit} added to your habits! ✅")
+        st.success(f"{habit} added successfully! ✅")
     else:
         st.error("Please enter a habit!")
 
-# =========================
-# AI Chatbot Section
-# =========================
-st.header("StepZen AI Chatbot 🤖")
-user_input = st.text_input("Ask me anything:")
-if st.button("Send"):
+st.subheader("🤖 AI Chatbot")
+
+user_input = st.text_input("Ask something...")
+
+if st.button("Ask AI"):
     if user_input:
         try:
-            # Use the new method generate_content
-            response = genai.generate_content(
-                model="models/gemini-2.5-flash",
-                prompt=user_input
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=user_input,
             )
-            st.write("Chatbot:", response.text)
+            st.write(response.text)
         except Exception as e:
             st.error(f"Error: {e}")
-    else:
-        st.warning("Please type a question!")
