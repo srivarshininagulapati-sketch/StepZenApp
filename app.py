@@ -54,7 +54,7 @@ if st.button("Ask AI"):
         if "who created you" in user_input.lower():
             answer = "Sri Varshini Nagulapati 💖"
         else:
-            try:
+try:
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=user_input,
@@ -67,8 +67,6 @@ except Exception as e:
         answer = f"Error: {e}"
 
 st.write(answer)
-
-
 
         # Save chat
         chat_history.append({"question": user_input, "answer": answer})
