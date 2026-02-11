@@ -1,43 +1,46 @@
 import streamlit as st
 import json
-from google.genai import Client
 import os
+from google.genai import Client
 
-# Initialize Gemini client
+# Load API key from Streamlit secrets
 client = Client(api_key=st.secrets["GOOGLE_API_KEY"])
 
-st.title("My First Chatbot App")
+# File to store habits permanently
+HABITS_FILE = "habits.json"
 
-# File to save habits/questions
-HABITS_FILE = ".streamlit/habits.json"
-
-# Load previous habits from file
+# Load existing habits
 if os.path.exists(HABITS_FILE):
     with open(HABITS_FILE, "r") as f:
-        st.session_state.history = json.load(f)
+        habits_data = json.load(f)
 else:
-    st.session_state.history = []
+    habits_data = {"name": "", "habits": []}
 
-# Input box
-question = st.text_input("Ask a question:")
+# User input for name
+name = st.text_input("Enter your name:", value=habits_data.get("name", ""))
+habits_data["name"] = name
 
-if question:
-    # Call Gemini API
-    response = client.generate_text(
-        model="chat-bison-001",
-        prompt=question,
-        temperature=0.7,
-        max_output_tokens=256
-    )
+st.title("My First Chatbot App")
+st.write(f"Welcome, {name}!")
 
-    # Save Q&A to session
-    st.session_state.history.append({"question": question, "answer": response.text})
-
-    # Save to file permanently
+# Input habit
+new_habit = st.text_input("Add a habit:")
+if st.button("Save habit") and new_habit:
+    habits_data["habits"].append(new_habit)
     with open(HABITS_FILE, "w") as f:
-        json.dump(st.session_state.history, f, indent=2)
+        json.dump(habits_data, f)
+    st.success(f"Habit '{new_habit}' saved!")
 
-# Display all previous Q&A
-for chat in st.session_state.history:
-    st.markdown(f"**You:** {chat['question']}")
-    st.markdown(f"**Bot:** {chat['answer']}")
+# Show saved habits
+st.write("Your Habits:")
+for h in habits_data.get("habits", []):
+    st.write("- " + h)
+
+# Chatbot interaction
+user_question = st.text_input("Ask a question to the chatbot:")
+if user_question:
+    response = client.responses.create(
+        model="models/text-bison-001",
+        input=user_question
+    )
+    st.write("Chatbot:", response.output_text)
