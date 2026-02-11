@@ -1,18 +1,33 @@
 import streamlit as st
-import json
-from google.genai import Client  # latest package
+from google import genai
 
-# Load secrets
-client = Client(api_key=st.secrets["GOOGLE_API_KEY"])
+# Configure API key
+client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
 
-st.title("My First Chatbot App")
+st.title("Hello Varshini 💖")
+st.write("My first Streamlit app 🚀")
 
-question = st.text_input("Ask a question:")
+st.subheader("🌟 Habit Tracker")
 
-if st.button("Send"):
-    if question:
-        response = client.responses.create(
-            model="models/text-bison-001",
-            input=question
-        )
-        st.write(response.output_text)
+habit = st.text_input("Enter a habit")
+
+if st.button("Add Habit"):
+    if habit:
+        st.success(f"{habit} added successfully! ✅")
+    else:
+        st.error("Please enter a habit!")
+
+st.subheader("🤖 AI Chatbot")
+
+user_input = st.text_input("Ask something...")
+
+if st.button("Ask AI"):
+    if user_input:
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=user_input,
+            )
+            st.write(response.text)
+        except Exception as e:
+            st.error(f"Error: {e}")
