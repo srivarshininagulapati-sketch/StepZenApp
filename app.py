@@ -1,24 +1,16 @@
 import streamlit as st
 import google.generativeai as genai
 
-# -----------------------------
-# Configure your Google API key
-# -----------------------------
-# Make sure you have your API key in .streamlit/secrets.toml as:
-# GOOGLE_API_KEY="YOUR_API_KEY_HERE"
+# Configure your Google API key from Streamlit secrets
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-# -----------------------------
-# Welcome Section
-# -----------------------------
+# --- Welcome Message ---
 st.title("Hello Varshini 💖")
-st.write("Welcome to StepZen 🌍 - My first Streamlit app 🚀")
+st.write("My first Streamlit app 🚀")
 
-# -----------------------------
-# Habit Tracker Section
-# -----------------------------
-st.subheader("StepZen Habit Tracker 🌟")
-st.write("Track your daily habits easily!")
+# --- Habit Tracker ---
+st.header("StepZen Habit Tracker 🌟")
+st.write("Welcome! Track your daily habits easily.")
 
 habit = st.text_input("Enter a habit")
 if st.button("Add Habit"):
@@ -27,20 +19,20 @@ if st.button("Add Habit"):
     else:
         st.error("Please enter a habit!")
 
-# -----------------------------
-# AI Chatbot Section
-# -----------------------------
-st.subheader("StepZen AI Chatbot 🤖")
-user_input = st.text_input("You:", key="chat_input")
+# --- AI Chatbot ---
+st.header("StepZen AI Chatbot 🤖")
+user_input = st.text_input("You: ", key="chat_input")
 
-if st.button("Send AI Response"):
+if st.button("Send", key="chat_button"):
     if user_input:
         try:
-            response = genai.models.generate_content(
-                model="models/gemini-2.5-flash",
-                prompt=user_input
+            response = genai.chat.create(
+                model="models/gemini-3-pro-preview",  # Use a valid model from your list
+                messages=[{"role": "user", "content": user_input}],
             )
-            # Display AI response
-            st.text_area("AI:", value=response.content[0].text, height=150)
+            bot_reply = response.output_text
+            st.text_area("Bot:", value=bot_reply, height=150)
         except Exception as e:
-            st.error(f"Error generating AI response: {e}")
+            st.error(f"Error: {e}")
+    else:
+        st.error("Please type a message to chat!")
