@@ -37,8 +37,9 @@ if st.button("Save Habit") and new_habit:
 # Chatbot question
 question = st.text_input("Ask a question:")
 if st.button("Get Answer") and question:
-    response = client.generate_text(
-        model="text-bison-001",
-        prompt=question
-    )
+    response = client.responses.create(
+    model="models/text-bison-001",
+    input=user_input
+)
+
     st.write("Answer:", response.text)
