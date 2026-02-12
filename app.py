@@ -19,7 +19,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # Optional: debug missing keys
 if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET or not GOOGLE_API_KEY:
-    print("⚠ Warning: Some API keys are missing in your .env!")
+    st.warning("⚠ Warning: Some API keys are missing in your .env!")
 
 # -------------------------------
 # Razorpay Client
@@ -45,9 +45,9 @@ if not os.path.exists(USERS_FILE):
 # Subscription Plans
 # -------------------------------
 PLANS = {
-    "Free": {"chats_per_day": 20, "price": 0, "plan_id": None},
-    "Silver": {"chats_per_day": 100, "price": 199, "plan_id": "plan_silver"},
-    "Gold": {"chats_per_day": 400, "price": 399, "plan_id": "plan_gold"}
+    "Free": {"chats_per_day": 20, "price": 0, "plan_SFBT9KT6xXg8Ua": None},
+    "Silver": {"chats_per_day": 100, "price": 199, "plan_SFBUBSaO3jLhGL": "plan_silver"},
+    "Gold": {"chats_per_day": 400, "price": 399, "plan_SFBVQIj73B3joe": "plan_gold"}
 }
 
 # -------------------------------
@@ -74,11 +74,13 @@ if email:
 
     user = users[email]
 
-    # -------------------------------
-    # Reset daily chat count if date changed
-    # -------------------------------
-    user.setdefault("last_chat_date", "")
+    # Ensure all required keys exist (for old users)
+    user.setdefault("habits", [])
+    user.setdefault("chats", [])
     user.setdefault("chats_used_today", 0)
+    user.setdefault("last_chat_date", str(datetime.date.today()))
+
+    # Reset daily chat count if date changed
     today_str = str(datetime.date.today())
     if user["last_chat_date"] != today_str:
         user["last_chat_date"] = today_str
