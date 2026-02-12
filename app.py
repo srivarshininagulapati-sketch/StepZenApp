@@ -9,12 +9,20 @@ from google import genai
 client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # =====================
+# App Title
+# =====================
+st.title("Hello Varshini 💖")
+st.write("Welcome to your Habit Tracker & AI Chatbot App 🚀")
+
+# =====================
 # User Login
 # =====================
 if "user_email" not in st.session_state:
-    st.session_state.user_email = st.text_input("Enter your email to start:")
+    email = st.text_input("Enter your email to start:")
+    if email:
+        st.session_state.user_email = email
 
-if st.session_state.user_email:
+if "user_email" in st.session_state:
     user_email = st.session_state.user_email
     st.success(f"Welcome, {user_email}!")
 
