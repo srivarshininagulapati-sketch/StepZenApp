@@ -1,97 +1,112 @@
 import streamlit as st
-import json
 import os
+import json
 from google import genai
 
-# Configure API key
+# =====================
+# Gemini API Client
+# =====================
 client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
 
-# ---------- App Title ----------
-st.title("Hello Varshini 💖")
-st.write("My first Streamlit app 🚀")
+# =====================
+# User Login
+# =====================
+if "user_email" not in st.session_state:
+    st.session_state.user_email = st.text_input("Enter your email to start:")
 
-# ---------- Habit Tracker ----------
-st.subheader("🌟 Habit Tracker")
+if st.session_state.user_email:
+    user_email = st.session_state.user_email
+    st.success(f"Welcome, {user_email}!")
 
-# File to save habits
-habits_file = "habits.json"
-if os.path.exists(habits_file):
-    with open(habits_file, "r") as f:
-        habits = json.load(f)
-else:
-    habits = []
+    # =====================
+    # File paths per user
+    # =====================
+    habits_file = f"habits_{user_email}.json"
+    chat_file = f"chat_{user_email}.json"
 
-# Input habit
-habit = st.text_input("Enter a habit")
-
-if st.button("Add Habit"):
-    if habit:
-        habits.append(habit)
-        with open(habits_file, "w") as f:
-            json.dump(habits, f)
-        st.success(f"{habit} added successfully! ✅")
+    # =====================
+    # Load habits & chat history
+    # =====================
+    if os.path.exists(habits_file):
+        with open(habits_file, "r") as f:
+            st.session_state.habits = json.load(f)
     else:
-        st.error("Please enter a habit!")
+        st.session_state.habits = []
 
-# Show all habits
-if habits:
-    st.write("Your habits so far:")
-    for h in habits:
-        st.write(f"- {h}")
+    if os.path.exists(chat_file):
+        with open(chat_file, "r") as f:
+            st.session_state.chat_history = json.load(f)
+    else:
+        st.session_state.chat_history = []
 
-# ---------- Chatbot ----------
-st.subheader("🤖 AI Chatbot")
+    # =====================
+    # Habit Tracker
+    # =====================
+    st.subheader("🌟 Habit Tracker")
+    habit = st.text_input("Enter a habit")
 
-# File to save chat history
-chat_file = "chat_history.json"
-if os.path.exists(chat_file):
-    with open(chat_file, "r") as f:
-        chat_history = json.load(f)
-else:
-    chat_history = []
+    if st.button("Add Habit"):
+        if habit:
+            st.session_state.habits.append(habit)
+            # Save to JSON
+            with open(habits_file, "w") as f:
+                json.dump(st.session_state.habits, f)
+            st.success(f"{habit} added successfully! ✅")
+        else:
+            st.error("Please enter a habit!")
 
-# Input user question
-user_input = st.text_input("Ask something...")
+    if st.session_state.habits:
+        st.write("Your habits:")
+        for h in st.session_state.habits:
+            st.write(f"- {h}")
 
-if st.button("Ask AI"):
-    if user_input:
-        try:
-            # Gemini API call
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=user_input,
-            )
-            answer = response.text
-        except Exception as e:
-            if "RESOURCE_EXHAUSTED" in str(e):
-                answer = "⚠️ Quota exceeded! Please try again tomorrow."
+    # =====================
+    # AI Chatbot
+    # =====================
+    st.subheader("🤖 AI Chatbot")
+    user_input = st.text_input("Ask something...")
+
+    if st.button("Ask AI") and user_input:
+        if user_input.strip() == "":
+            st.error("Please enter a question!")
+        else:
+            # Check if question was already asked
+            existing = [c["question"] for c in st.session_state.chat_history]
+            if user_input in existing:
+                for c in st.session_state.chat_history:
+                    if c["question"] == user_input:
+                        st.info("Retrieved from history:")
+                        st.write(c["answer"])
             else:
-                answer = f"Error: {e}"
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=user_input
+                    )
+                    answer = response.text
+                    st.write(answer)
 
-        # Save chat
-        chat_history.append({"user": user_input, "ai": answer})
-        with open(chat_file, "w") as f:
-            json.dump(chat_history, f)
+                    # Save chat
+                    st.session_state.chat_history.append({
+                        "question": user_input,
+                        "answer": answer
+                    })
+                    with open(chat_file, "w") as f:
+                        json.dump(st.session_state.chat_history, f)
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
-        # Display chat
-        st.write(answer)
-    else:
-        st.error("Please enter a question before asking.")
+    # =====================
+    # Show previous chat history
+    # =====================
+    if st.session_state.chat_history:
+        st.subheader("💬 Chat History")
+        for c in st.session_state.chat_history:
+            st.write(f"**Q:** {c['question']}")
+            st.write(f"**A:** {c['answer']}")
+            st.markdown("---")
 
-# Show previous chat history
-if chat_history:
-    st.write("💬 Chat History:")
-    for chat in chat_history:
-        st.write(f"**You:** {chat['user']}")
-        st.write(f"**AI:** {chat['ai']}")
-    if st.button("Clear Chat History"):
-        chat_history = []
-        with open(chat_file, "w") as f:
-            json.dump(chat_history, f)
-        st.success("Chat history cleared!")
-
-# ---------- Creator Info ----------
-st.subheader("👤 Creator Info")
-
-if st.button("Who created you?"):
-    st.info("This chatbot was created by Sri Varshini Nagulapati 💖")
+    # =====================
+    # Creator info
+    # =====================
+    st.markdown("Created by **Sri Varshini Nagulapati** 💖")
