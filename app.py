@@ -1,25 +1,20 @@
 import os
-import json
-import datetime
-import streamlit as st
 from dotenv import load_dotenv
-import razorpay
+import streamlit as st
 
-# -------------------------------
-# Load .env and secrets safely
-# -------------------------------
-load_dotenv()  # loads .env from root folder
-
-# Razorpay keys
+# Load Razorpay keys from root .env
+load_dotenv()
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 
-# Google Gemini / GenAI API key
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# Load Google API key from Streamlit secrets
+GOOGLE_API_KEY = st.secrets.get("google_api_key")
 
-# Optional: debug missing keys
-if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET or not GOOGLE_API_KEY:
-    st.warning("⚠ Warning: Some API keys are missing in your .env!")
+# Safety check
+if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+    st.warning("⚠ Razorpay keys missing in your .env!")
+if not GOOGLE_API_KEY:
+    st.warning("⚠ Google API key missing in Streamlit secrets!")
 
 # -------------------------------
 # Razorpay Client
