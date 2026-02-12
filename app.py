@@ -1,4 +1,3 @@
-# app.py
 import os
 import json
 import datetime
@@ -7,18 +6,20 @@ from dotenv import load_dotenv
 import razorpay
 
 # -------------------------------
-# Load .env and secrets
+# Load .env and secrets safely
 # -------------------------------
 load_dotenv()  # Loads .env from root folder
 
+# Razorpay keys
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 
-# Google Gemini API key from secrets/.env
-with open("secrets/.env") as f:
-    for line in f:
-        if "GOOGLE_API_KEY" in line:
-            GOOGLE_API_KEY = line.strip().split("=")[1]
+# Google Gemini / GenAI API key
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# Debug missing keys (optional)
+if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET or not GOOGLE_API_KEY:
+    print("⚠ Warning: Some API keys are missing in your .env!")
 
 # -------------------------------
 # Razorpay Client
@@ -45,8 +46,8 @@ if not os.path.exists(USERS_FILE):
 # -------------------------------
 PLANS = {
     "Free": {"chats_per_day": 20, "price": 0, "plan_id": None},
-    "Silver": {"chats_per_day": 100, "price": 199, "plan_id": "plan_silver"},  # Replace with Razorpay plan_id
-    "Gold": {"chats_per_day": 400, "price": 399, "plan_id": "plan_gold"}       # Replace with Razorpay plan_id
+    "Silver": {"chats_per_day": 100, "price": 199, "plan_id": "plan_silver"},
+    "Gold": {"chats_per_day": 400, "price": 399, "plan_id": "plan_gold"}
 }
 
 # -------------------------------
@@ -54,9 +55,14 @@ PLANS = {
 # -------------------------------
 email = st.text_input("Enter your Email")
 if email:
-    with open(USERS_FILE, "r") as f:
-        users = json.load(f)
+    # Load users safely
+    try:
+        with open(USERS_FILE, "r") as f:
+            users = json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError):
+        users = {}
 
+    # Initialize new user if not exist
     if email not in users:
         users[email] = {
             "plan": "Free",
@@ -65,17 +71,23 @@ if email:
             "chats_used_today": 0,
             "last_chat_date": str(datetime.date.today())
         }
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f)
 
     user = users[email]
 
+    # -------------------------------
     # Reset daily chat count if date changed
-    if user["last_chat_date"] != str(datetime.date.today()):
+    # -------------------------------
+    user.setdefault("last_chat_date", "")
+    user.setdefault("chats_used_today", 0)
+    today_str = str(datetime.date.today())
+    if user["last_chat_date"] != today_str:
+        user["last_chat_date"] = today_str
         user["chats_used_today"] = 0
-        user["last_chat_date"] = str(datetime.date.today())
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f)
+
+    # Save user updates
+    users[email] = user
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f)
 
     st.markdown(f"**Current Plan:** {user['plan']}")
     st.markdown(f"**Chats Used Today:** {user['chats_used_today']} / {PLANS[user['plan']]['chats_per_day']}")
@@ -87,13 +99,15 @@ if email:
     new_habit = st.text_input("Add New Habit")
     if new_habit:
         user["habits"].append(new_habit)
+        users[email] = user
         with open(USERS_FILE, "w") as f:
             json.dump(users, f)
 
     for idx, h in enumerate(user["habits"]):
         st.write(f"✔️ {h}", key=f"habit{idx}")
         if st.button(f"Delete {h}", key=f"del_habit{idx}"):
-            user["habits"].pop(idx)
+            user["habits"].remove(h)
+            users[email] = user
             with open(USERS_FILE, "w") as f:
                 json.dump(users, f)
             st.experimental_rerun()
@@ -108,12 +122,12 @@ if email:
             st.error("You reached your daily chat limit. Upgrade plan for more.")
         else:
             try:
-                # Google GenAI Client
                 from google_genai import Client
                 gen_client = Client(api_key=GOOGLE_API_KEY)
                 response = gen_client.generate_text(prompt=question)
                 user["chats"].append({"Q": question, "A": response})
                 user["chats_used_today"] += 1
+                users[email] = user
                 with open(USERS_FILE, "w") as f:
                     json.dump(users, f)
                 st.success(f"A: {response}")
@@ -127,6 +141,7 @@ if email:
         st.write(f"A: {c['A']}")
         if st.button(f"Delete Chat {idx}", key=f"del_chat{idx}"):
             user["chats"].pop(idx)
+            users[email] = user
             with open(USERS_FILE, "w") as f:
                 json.dump(users, f)
             st.experimental_rerun()
@@ -139,6 +154,7 @@ if email:
     if selected_plan != user['plan']:
         if PLANS[selected_plan]['price'] == 0:
             user['plan'] = selected_plan
+            users[email] = user
             with open(USERS_FILE, "w") as f:
                 json.dump(users, f)
             st.success("Plan changed to Free")
@@ -151,6 +167,7 @@ if email:
                         "total_count": 12
                     })
                     user['plan'] = selected_plan
+                    users[email] = user
                     with open(USERS_FILE, "w") as f:
                         json.dump(users, f)
                     st.success(f"Subscribed to {selected_plan}!")
