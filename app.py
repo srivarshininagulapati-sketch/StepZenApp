@@ -1,146 +1,182 @@
 import streamlit as st
+import datetime
+import razorpay
 import json
 import os
-import pandas as pd
-from google import genai
+from dotenv import load_dotenv
 
-# -------------------------------
-# 1️⃣ User Email Login
-# -------------------------------
-st.title("Hello Varshini 💖")
-st.write("Welcome to your Habit Tracker & AI Chatbot App 🚀")
+# ==============================
+# LOAD ENV VARIABLES
+# ==============================
+load_dotenv()
 
-if "user_email" not in st.session_state:
-    st.session_state.user_email = st.text_input("Enter your email to start:")
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 
-if st.session_state.user_email:
-    user_email = st.session_state.user_email
-    st.success(f"Welcome, {user_email}!")
+client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
-    # -------------------------------
-    # 2️⃣ File Paths for this user
-    # -------------------------------
-    habits_file = f"habits_{user_email}.json"
-    chat_file = f"chat_{user_email}.json"
+# ==============================
+# PAGE CONFIG
+# ==============================
+st.set_page_config(page_title="AI Habit Tracker")
+st.title("🤖 Chatbot")
+st.caption("Created by Srivarshini Nagulapati")
 
-    # Initialize files if not exist
-    if not os.path.exists(habits_file):
-        with open(habits_file, "w") as f:
-            json.dump([], f)
-    if not os.path.exists(chat_file):
-        with open(chat_file, "w") as f:
-            json.dump([], f)
+# ==============================
+# 🔴 ADD YOUR REAL PLAN IDs HERE
+# ==============================
+BASIC_PLAN_ID = "plan_SFBT9KT6xXg8Ua"
+SILVER_PLAN_ID = "plan_SFBUBSaO3jLhGL"
+GOLD_PLAN_ID = "plan_SFBVQIj73B3joe"
 
-    # Load data
-    with open(habits_file, "r") as f:
-        st.session_state.habits = json.load(f)
-    with open(chat_file, "r") as f:
-        st.session_state.chat_history = json.load(f)
+PLAN_LIMITS = {
+    "Free": 20,
+    "Basic": 50,
+    "Silver": 100,
+    "Gold": 400
+}
 
-    # -------------------------------
-    # 3️⃣ Configure Gemini API
-    # -------------------------------
-    client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
+DATA_FILE = "users.json"
 
-    # -------------------------------
-    # 4️⃣ Layout: Columns for Styling
-    # -------------------------------
-    col1, col2 = st.columns(2)
+# ==============================
+# DATABASE SETUP
+# ==============================
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w") as f:
+        json.dump({}, f)
 
-    # -------------------------------
-    # 4a️⃣ Habit Tracker
-    # -------------------------------
-    with col1:
-        st.subheader("🌟 Habit Tracker")
-        habit = st.text_input("Enter a habit")
-        if st.button("Add Habit"):
-            if habit:
-                st.session_state.habits.append(habit)
-                with open(habits_file, "w") as f:
-                    json.dump(st.session_state.habits, f)
-                st.success(f"{habit} added successfully! ✅")
-            else:
-                st.error("Please enter a habit!")
+def load_users():
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
 
-        # Show habits + delete option
-        if st.session_state.habits:
-            st.write("Your habits:")
-            to_delete = st.multiselect("Select habits to delete:", st.session_state.habits)
-            if st.button("Delete Selected Habits") and to_delete:
-                for h in to_delete:
-                    st.session_state.habits.remove(h)
-                with open(habits_file, "w") as f:
-                    json.dump(st.session_state.habits, f)
-                st.success("Selected habits deleted ✅")
-            for h in st.session_state.habits:
-                st.write(f"- {h}")
+def save_users(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
 
-        # Download habits
-        if st.session_state.habits:
-            st.download_button(
-                label="Download Habits",
-                data=json.dumps(st.session_state.habits),
-                file_name=f"habits_{user_email}.json",
-                mime="application/json"
-            )
+# ==============================
+# LOGIN
+# ==============================
+email = st.text_input("Enter your Email")
 
-    # -------------------------------
-    # 4b️⃣ AI Chatbot
-    # -------------------------------
-    with col2:
-        st.subheader("🤖 AI Chatbot")
-        user_input = st.text_input("Ask something...")
-        if st.button("Ask AI") and user_input:
-            # Check if question already exists
-            existing = [c["question"] for c in st.session_state.chat_history]
-            if user_input in existing:
-                for c in st.session_state.chat_history:
-                    if c["question"] == user_input:
-                        st.info("Retrieved from history:")
-                        st.write(c["answer"])
-            else:
-                try:
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=user_input,
-                    )
-                    answer = response.text
-                    st.session_state.chat_history.append({"question": user_input, "answer": answer})
-                    with open(chat_file, "w") as f:
-                        json.dump(st.session_state.chat_history, f)
-                    st.write(answer)
-                except Exception as e:
-                    st.warning("API quota reached or error occurred. Please try again later.")
+if not email:
+    st.stop()
 
-        # Show chat history + delete option
-        if st.session_state.chat_history:
-            st.subheader("💬 Chat History")
-            to_delete_chat = []
-            for i, c in enumerate(st.session_state.chat_history):
-                if st.checkbox(f"Delete Q: {c['question']}", key=f"del{i}"):
-                    to_delete_chat.append(c)
-            if st.button("Delete Selected Chat Messages") and to_delete_chat:
-                for c in to_delete_chat:
-                    st.session_state.chat_history.remove(c)
-                with open(chat_file, "w") as f:
-                    json.dump(st.session_state.chat_history, f)
-                st.success("Selected chat messages deleted ✅")
+users = load_users()
 
-            # Display chat history
-            for c in st.session_state.chat_history:
-                st.markdown(f"**Q:** {c['question']}\n**A:** {c['answer']}")
+if email not in users:
+    users[email] = {
+        "plan": "Free",
+        "chats_today": 0,
+        "last_date": str(datetime.date.today()),
+        "habits": [],
+        "chat_history": []
+    }
+    save_users(users)
 
-            # Download chat history as CSV
-            df = pd.DataFrame(st.session_state.chat_history)
-            st.download_button(
-                label="Download Chat History",
-                data=df.to_csv(index=False),
-                file_name=f"chat_{user_email}.csv",
-                mime="text/csv"
-            )
+user = users[email]
 
-    # -------------------------------
-    # 5️⃣ Creator Info
-    # -------------------------------
-    st.markdown("---")
-    st.markdown("Created by Sri Varshini Nagulapati 💖")
+# Reset daily usage
+today = str(datetime.date.today())
+if user["last_date"] != today:
+    user["chats_today"] = 0
+    user["last_date"] = today
+    save_users(users)
+
+st.write("### Current Plan:", user["plan"])
+st.write("Chats Used Today:", user["chats_today"], "/", PLAN_LIMITS[user["plan"]])
+
+# ==============================
+# CHAT SECTION
+# ==============================
+st.subheader("🤖 AI Chat")
+
+question = st.text_input("Ask something")
+
+if st.button("Send"):
+    if user["chats_today"] >= PLAN_LIMITS[user["plan"]]:
+        st.error("Daily limit reached. Please upgrade.")
+    else:
+        answer = "AI Response to: " + question
+
+        user["chat_history"].append({
+            "q": question,
+            "a": answer
+        })
+
+        user["chats_today"] += 1
+        save_users(users)
+
+        st.success(answer)
+
+# ==============================
+# CHAT HISTORY + DELETE
+# ==============================
+st.subheader("📝 Chat History")
+
+if user["chat_history"]:
+    for i, chat in enumerate(user["chat_history"]):
+        st.write("Q:", chat["q"])
+        st.write("A:", chat["a"])
+
+        if st.button(f"Delete Chat {i}"):
+            user["chat_history"].pop(i)
+            save_users(users)
+            st.rerun()
+
+# Download
+if user["chat_history"]:
+    st.download_button(
+        label="Download Chat History",
+        data=json.dumps(user["chat_history"]),
+        file_name="chat_history.json"
+    )
+
+# ==============================
+# HABIT TRACKER
+# ==============================
+st.subheader("📅 Habit Tracker")
+
+new_habit = st.text_input("Add New Habit")
+
+if st.button("Add Habit"):
+    if new_habit:
+        user["habits"].append(new_habit)
+        save_users(users)
+        st.success("Habit Added!")
+
+if user["habits"]:
+    for habit in user["habits"]:
+        st.write("✔️", habit)
+
+# ==============================
+# SUBSCRIPTION SECTION
+# ==============================
+st.subheader("💎 Upgrade Plan")
+
+plan_choice = st.selectbox("Choose Plan", [
+    "Basic - ₹99",
+    "Silver - ₹199",
+    "Gold - ₹499"
+])
+
+if st.button("Subscribe"):
+    try:
+        if plan_choice == "Basic - ₹99":
+            selected_plan = BASIC_PLAN_ID
+        elif plan_choice == "Silver - ₹199":
+            selected_plan = SILVER_PLAN_ID
+        else:
+            selected_plan = GOLD_PLAN_ID
+
+        subscription = client.subscription.create({
+            "plan_id": selected_plan,
+            "customer_notify": 1,
+            "total_count": 12
+        })
+
+        st.success("Subscription Created Successfully!")
+        st.write("Subscription ID:", subscription["id"])
+
+    except Exception as e:
+        st.error("Subscription Failed")
+        st.write(e)
