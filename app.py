@@ -103,13 +103,13 @@ if email:
             json.dump(users, f)
 
     for idx, h in enumerate(user["habits"]):
-        st.write(f"✔️ {h}")  # ✅ No key needed here
+        st.write(f"✔️ {h}")  # Display habit
         if st.button(f"Delete {h}", key=f"del_habit{idx}"):
             user["habits"].pop(idx)
             users[email] = user
             with open(USERS_FILE, "w") as f:
                 json.dump(users, f)
-            st.experimental_rerun()
+            st.stop()  # Stops current run, updates UI
 
     # -------------------------------
     # AI Chat
@@ -143,7 +143,7 @@ if email:
             users[email] = user
             with open(USERS_FILE, "w") as f:
                 json.dump(users, f)
-            st.experimental_rerun()
+            st.stop()  # Stops current run, updates UI
 
     # -------------------------------
     # Upgrade Plan
@@ -172,4 +172,3 @@ if email:
                     st.success(f"Subscribed to {selected_plan}!")
                 except Exception as e:
                     st.error(f"Subscription Failed: {str(e)}")
-
