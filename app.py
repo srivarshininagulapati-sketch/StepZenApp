@@ -8,7 +8,7 @@ import razorpay
 # -------------------------------
 # Load .env and secrets safely
 # -------------------------------
-load_dotenv()  # Loads .env from root folder
+load_dotenv()  # loads .env from root folder
 
 # Razorpay keys
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
@@ -17,7 +17,7 @@ RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 # Google Gemini / GenAI API key
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# Debug missing keys (optional)
+# Optional: debug missing keys
 if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET or not GOOGLE_API_KEY:
     print("⚠ Warning: Some API keys are missing in your .env!")
 
@@ -84,7 +84,6 @@ if email:
         user["last_chat_date"] = today_str
         user["chats_used_today"] = 0
 
-    # Save user updates
     users[email] = user
     with open(USERS_FILE, "w") as f:
         json.dump(users, f)
@@ -104,9 +103,9 @@ if email:
             json.dump(users, f)
 
     for idx, h in enumerate(user["habits"]):
-        st.write(f"✔️ {h}", key=f"habit{idx}")
+        st.write(f"✔️ {h}")  # ✅ No key needed here
         if st.button(f"Delete {h}", key=f"del_habit{idx}"):
-            user["habits"].remove(h)
+            user["habits"].pop(idx)
             users[email] = user
             with open(USERS_FILE, "w") as f:
                 json.dump(users, f)
@@ -173,3 +172,4 @@ if email:
                     st.success(f"Subscribed to {selected_plan}!")
                 except Exception as e:
                     st.error(f"Subscription Failed: {str(e)}")
+
