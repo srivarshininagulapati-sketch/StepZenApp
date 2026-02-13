@@ -2,6 +2,7 @@ import streamlit as st
 import datetime
 from supabase import create_client
 import google.generativeai as genai
+import razorpay
 
 # ----------------------------
 # SECRETS (CLOUD SAFE)
@@ -27,13 +28,19 @@ genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 # ----------------------------
+# RAZORPAY CLIENT
+# ----------------------------
+
+rz_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+# ----------------------------
 # PLANS
 # ----------------------------
 
 PLANS = {
-    "Free": {"daily_limit": 20, "price": 0},
-    "Silver": {"daily_limit": 100, "price": 199},
-    "Gold": {"daily_limit": 400, "price": 399},
+    "Free": {"daily_limit": 20, "price": 0, "plan_SFBT9KT6xXg8Ua": None},
+    "Silver": {"daily_limit": 100, "price": 199, "plan_SFBUBSaO3jLhGL": "plan_ABC123XYZ"},  # replace with actual plan ID
+    "Gold": {"daily_limit": 400, "price": 399, "plan_SFBVQIj73B3joe": "plan_DEF456XYZ"},    # replace with actual plan ID
 }
 
 # ----------------------------
@@ -44,7 +51,6 @@ st.title("Chatbot & Habit Tracker")
 st.markdown("Created by **Srivarshini Nagulapati 💖**")
 
 email = st.text_input("Enter your Email")
-
 if not email:
     st.stop()
 
@@ -55,7 +61,6 @@ today = str(datetime.date.today())
 # ----------------------------
 
 response = supabase.table("users").select("*").eq("email", email).execute()
-
 if response.data:
     user = response.data[0]
 else:
@@ -78,99 +83,12 @@ if user["last_chat_date"] != today:
         "last_chat_date": today
     }).eq("email", email).execute()
 
-st.write(f"Current Plan: {user['plan']}")
-st.write(f"Chats Used Today: {user['chats_today']} / {PLANS[user['plan']]['daily_limit']}")
+st.write(f"**Current Plan:** {user['plan']}")
+st.write(f"**Chats Used Today:** {user['chats_today']} / {PLANS[user['plan']]['daily_limit']}")
 
 # ----------------------------
 # HABIT TRACKER
 # ----------------------------
 
 st.subheader("📅 Habit Tracker")
-
-new_habit = st.text_input("Add New Habit")
-
-if st.button("Add Habit") and new_habit:
-    user["habits"].append(new_habit)
-    supabase.table("users").update({"habits": user["habits"]}).eq("email", email).execute()
-    st.rerun()
-
-for h in user["habits"]:
-    st.write(f"✔️ {h}")
-
-# ----------------------------
-# AI CHAT
-# ----------------------------
-
-st.subheader("🤖 AI Chat")
-
-question = st.text_input("Ask something")
-
-if st.button("Send") and question:
-
-    if user["chats_today"] >= PLANS[user["plan"]]["daily_limit"]:
-        st.error("Daily chat limit reached. Upgrade plan.")
-    else:
-        try:
-            response = model.generate_content(question)
-            response_text = response.text
-        except Exception as e:
-            response_text = f"Error: {str(e)}"
-
-        user["chats"].append({"Q": question, "A": response_text})
-        user["chats_today"] += 1
-
-        supabase.table("users").update({
-            "chats": user["chats"],
-            "chats_today": user["chats_today"]
-        }).eq("email", email).execute()
-
-        st.rerun()
-
-# ----------------------------
-# CHAT HISTORY + DELETE OPTION
-# ----------------------------
-
-st.subheader("💬 Chat History")
-
-for i, c in enumerate(user["chats"]):
-    st.markdown(f"**Q:** {c['Q']}")
-    st.markdown(f"**A:** {c['A']}")
-    if st.button("Delete", key=f"del_{i}"):
-        user["chats"].pop(i)
-        supabase.table("users").update({"chats": user["chats"]}).eq("email", email).execute()
-        st.rerun()
-    st.markdown("---")
-
-# ----------------------------
-# UPGRADE PLAN (DEMO MODE)
-# ----------------------------
-
-st.subheader("💎 Upgrade Plan")
-
-selected_plan = st.radio("Choose Plan", ["Free", "Silver", "Gold"])
-plan_info = PLANS[selected_plan]
-
-st.write(f"Daily Chat Limit: {plan_info['daily_limit']}")
-st.write(f"Price per month: ₹{plan_info['price']}")
-
-if st.button("Activate Plan"):
-    supabase.table("users").update({
-        "plan": selected_plan
-    }).eq("email", email).execute()
-
-    st.success(f"Plan updated to {selected_plan}")
-    st.rerun()
-
-# ----------------------------
-# EXPORT DATA
-# ----------------------------
-
-st.subheader("💾 Export Data")
-
-if st.button("Download JSON"):
-    st.download_button(
-        label="Download",
-        data=str(user),
-        file_name="user_data.json",
-        mime="application/json"
-    )
+new_habit = st._
