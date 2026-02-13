@@ -5,10 +5,11 @@ import datetime
 import os
 from dotenv import load_dotenv
 
-# Load Razorpay keys from .env
-load_dotenv()
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+# Local run
+load_dotenv()  # only for local
+
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET")
 
 # Check keys
 if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
@@ -63,21 +64,20 @@ if not email:
     st.stop()
 
 # Initialize new user
+# Find or create user
 if email not in users:
     users[email] = {
-        "last_chat_date": str(datetime.date.today()),
-        "chats_today": 0,
+        "email": email,
         "plan": "Free",
+        "chats_used": 0,
+        "last_chat_date": str(datetime.date.today()),
         "habits": [],
-        "chats": []
+        "chats": []   # <-- important
     }
 else:
-    # Reset daily chats if new day
-    if users[email].get("last_chat_date") != str(datetime.date.today()):
-        users[email]["last_chat_date"] = str(datetime.date.today())
-        users[email]["chats_today"] = 0
-
-user = users[email]
+    # If 'chats' key missing, add it
+    if "chats" not in users[email]:
+        users[email]["chats"] = []
 
 # Show user info
 st.write(f"Current Plan: {user['plan']}")
