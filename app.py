@@ -1,11 +1,10 @@
 import streamlit as st
 import datetime
 from supabase import create_client
-import razorpay
 import google.generativeai as genai
 
 # ----------------------------
-# SECRETS (SAFE)
+# SECRETS (LOCAL & SAFE)
 # ----------------------------
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -22,20 +21,25 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # GOOGLE AI SETUP
 # ----------------------------
 genai.configure(api_key=GOOGLE_API_KEY)
-model = genai.GenerativeModel("gemini-1.5")  # latest working model
 
-# ----------------------------
-# RAZORPAY CLIENT
-# ----------------------------
-rz_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+# Optionally: list models for debugging
+# Uncomment the following lines if you want to see your available models
+# models = genai.list_models()
+# print("Available models for your API key:")
+# for m in models:
+#     print(m["name"])
+
+# Use a valid model name you get from the above list
+MODEL_NAME = "gemini-1.5"  # Replace with a model that exists for your key
+model = genai.GenerativeModel(MODEL_NAME)
 
 # ----------------------------
 # PLANS
 # ----------------------------
 PLANS = {
-    "Free": {"daily_limit": 20, "price": 0, "plan_SFBT9KT6xXg8Ua": None},
-    "Silver": {"daily_limit": 100, "price": 199, "plan_SFBUBSaO3jLhGL": "plan_silver_id"},
-    "Gold": {"daily_limit": 400, "price": 399, "plan_SFBVQIj73B3joe": "plan_gold_id"},
+    "Free": {"daily_limit": 20, "price": 0},
+    "Silver": {"daily_limit": 100, "price": 199, "plan_SFBUBSaO3jLhGL": "plan_silver"},
+    "Gold": {"daily_limit": 400, "price": 399, "plan_SFBVQIj73B3joe": "plan_gold"},
 }
 
 # ----------------------------
@@ -51,7 +55,7 @@ if not email:
 today = str(datetime.date.today())
 
 # ----------------------------
-# LOAD USER
+# LOAD USER FROM SUPABASE
 # ----------------------------
 response = supabase.table("users").select("*").eq("email", email).execute()
 
@@ -68,8 +72,8 @@ else:
     }
     supabase.table("users").insert(user).execute()
 
-# Reset daily chat count
-if user.get("last_chat_date") != today:
+# Reset daily chats
+if user["last_chat_date"] != today:
     user["chats_today"] = 0
     user["last_chat_date"] = today
     supabase.table("users").update({
@@ -77,23 +81,24 @@ if user.get("last_chat_date") != today:
         "last_chat_date": today
     }).eq("email", email).execute()
 
-st.markdown(f"**Current Plan:** {user['plan']}")
-st.markdown(f"**Chats Used Today:** {user['chats_today']} / {PLANS[user['plan']]['daily_limit']}")
+st.write(f"Current Plan: {user['plan']}")
+st.write(f"Chats Used Today: {user['chats_today']} / {PLANS[user['plan']]['daily_limit']}")
 
 # ----------------------------
 # HABIT TRACKER
 # ----------------------------
 st.subheader("📅 Habit Tracker")
+
 new_habit = st.text_input("Add New Habit")
 if st.button("Add Habit") and new_habit:
     user["habits"].append(new_habit)
     supabase.table("users").update({"habits": user["habits"]}).eq("email", email).execute()
     st.experimental_rerun()
 
-for idx, h in enumerate(user["habits"]):
+for i, h in enumerate(user["habits"]):
     st.write(f"✔️ {h}")
-    if st.button(f"Delete {h}", key=f"del_habit_{idx}"):
-        user["habits"].pop(idx)
+    if st.button(f"Delete {h}", key=f"del_habit_{i}"):
+        user["habits"].pop(i)
         supabase.table("users").update({"habits": user["habits"]}).eq("email", email).execute()
         st.experimental_rerun()
 
@@ -124,11 +129,11 @@ if st.button("Send") and question:
 # CHAT HISTORY
 # ----------------------------
 st.subheader("💬 Chat History")
-for idx, c in enumerate(user["chats"]):
+for i, c in enumerate(user["chats"]):
     st.markdown(f"**Q:** {c['Q']}")
     st.markdown(f"**A:** {c['A']}")
-    if st.button("Delete", key=f"del_chat_{idx}"):
-        user["chats"].pop(idx)
+    if st.button("Delete", key=f"del_chat_{i}"):
+        user["chats"].pop(i)
         supabase.table("users").update({"chats": user["chats"]}).eq("email", email).execute()
         st.experimental_rerun()
     st.markdown("---")
@@ -143,24 +148,10 @@ st.write(f"Daily Chat Limit: {plan_info['daily_limit']}")
 st.write(f"Price per month: ₹{plan_info['price']}")
 
 if st.button("Activate Plan"):
-    if plan_info["price"] == 0:
-        user["plan"] = selected_plan
-        supabase.table("users").update({"plan": selected_plan}).eq("email", email).execute()
-        st.success(f"Plan updated to {selected_plan}")
-        st.experimental_rerun()
-    else:
-        try:
-            subscription = rz_client.subscription.create({
-                "plan_id": plan_info["plan_id"],
-                "customer_notify": 1,
-                "total_count": 12
-            })
-            user["plan"] = selected_plan
-            supabase.table("users").update({"plan": selected_plan}).eq("email", email).execute()
-            st.success(f"Subscribed to {selected_plan}! Payment done via Razorpay.")
-            st.experimental_rerun()
-        except Exception as e:
-            st.error(f"Subscription failed: {str(e)}")
+    user["plan"] = selected_plan
+    supabase.table("users").update({"plan": selected_plan}).eq("email", email).execute()
+    st.success(f"Plan updated to {selected_plan}")
+    st.experimental_rerun()
 
 # ----------------------------
 # EXPORT DATA
