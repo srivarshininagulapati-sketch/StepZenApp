@@ -1,91 +1,119 @@
-# app.py
 import streamlit as st
 import json
 import datetime
 import os
 from dotenv import load_dotenv
 
-# Local run
-load_dotenv()  # only for local
+# ----------------------------
+# ENV & SECRETS
+# ----------------------------
+
+load_dotenv()  # Only for local development
 
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET")
 
-# Check keys
 if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
-    st.warning("⚠ Razorpay keys missing in your .env!")
+    st.warning("⚠ Razorpay keys missing!")
 
-# Load Google API key from Streamlit secrets
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 except:
     GOOGLE_API_KEY = None
     st.warning("⚠ Google API key missing in Streamlit secrets!")
 
-# Import Google GenAI client safely
+# ----------------------------
+# GOOGLE GENAI IMPORT (CORRECT)
+# ----------------------------
+
 try:
-    from google_genai import Client as GenAIClient
-except ModuleNotFoundError:
-    GenAIClient = None
-    st.warning("⚠ google_genai module missing. Install via pip!")
+    from google import genai
+except ImportError:
+    genai = None
+    st.error("Google GenAI module not installed. Check requirements.txt")
 
-# Initialize Google AI client
 client = None
-if GenAIClient and GOOGLE_API_KEY:
-    client = GenAIClient(api_key=GOOGLE_API_KEY)
+if genai and GOOGLE_API_KEY:
+    client = genai.Client(api_key=GOOGLE_API_KEY)
 
-# Users file
+# ----------------------------
+# USERS STORAGE
+# ----------------------------
+
 USERS_FILE = "users.json"
+
 if os.path.exists(USERS_FILE):
     with open(USERS_FILE, "r") as f:
         users = json.load(f)
 else:
     users = {}
 
-# Save users
 def save_users():
     with open(USERS_FILE, "w") as f:
         json.dump(users, f, indent=4)
 
-# Plans
+# ----------------------------
+# PLANS
+# ----------------------------
+
 PLANS = {
     "Free": {"daily_limit": 20, "price": 0},
     "Silver": {"daily_limit": 100, "price": 199},
     "Gold": {"daily_limit": 400, "price": 399},
 }
 
+# ----------------------------
 # UI
+# ----------------------------
+
 st.title("Chatbot & Habit Tracker")
 st.markdown("Created by **Srivarshini Nagulapati 💖**")
 
-# Step 1: User email
 email = st.text_input("Enter your Email")
+
 if not email:
     st.stop()
 
-# Initialize new user
-# Find or create user
+# ----------------------------
+# USER INITIALIZATION
+# ----------------------------
+
+today = str(datetime.date.today())
+
 if email not in users:
     users[email] = {
         "email": email,
         "plan": "Free",
-        "chats_used": 0,
-        "last_chat_date": str(datetime.date.today()),
+        "chats_today": 0,
+        "last_chat_date": today,
         "habits": [],
-        "chats": []   # <-- important
+        "chats": []
     }
-else:
-    # If 'chats' key missing, add it
-    if "chats" not in users[email]:
-        users[email]["chats"] = []
 
-# Show user info
+user = users[email]
+
+# Reset daily chats if new day
+if user["last_chat_date"] != today:
+    user["chats_today"] = 0
+    user["last_chat_date"] = today
+
+save_users()
+
+# ----------------------------
+# USER INFO
+# ----------------------------
+
 st.write(f"Current Plan: {user['plan']}")
 st.write(f"Chats Used Today: {user['chats_today']} / {PLANS[user['plan']]['daily_limit']}")
 
-# Habit Tracker
+# ----------------------------
+# HABIT TRACKER
+# ----------------------------
+
 st.subheader("📅 Habit Tracker")
+
 new_habit = st.text_input("Add New Habit")
+
 if st.button("Add Habit") and new_habit:
     user["habits"].append(new_habit)
     save_users()
@@ -93,62 +121,87 @@ if st.button("Add Habit") and new_habit:
 for h in user["habits"]:
     st.write(f"✔️ {h}")
 
-# AI Chat
+# ----------------------------
+# AI CHAT
+# ----------------------------
+
 st.subheader("🤖 AI Chat")
+
 question = st.text_input("Ask something")
 
 if st.button("Send") and question:
+
     if user["chats_today"] >= PLANS[user['plan']]['daily_limit']:
         st.error("Daily chat limit reached. Upgrade plan for more chats!")
     else:
-        response_text = "API quota reached or AI client missing"
+        response_text = "AI unavailable."
+
         if client:
             try:
-                response = client.generate_content(
+                response = client.models.generate_content(
                     model="gemini-2.5-flash",
-                    prompt=question,
-                    max_output_tokens=200
+                    contents=question
                 )
-                response_text = response.output[0].content[0].text
+                response_text = response.text
             except Exception as e:
                 response_text = f"Error: {str(e)}"
+
         user["chats"].append({"Q": question, "A": response_text})
         user["chats_today"] += 1
         save_users()
-        st.write(f"AI Response to: {question}")
+
+        st.write("AI Response:")
         st.write(response_text)
 
-# Chat history
-st.subheader("💬 Chat History")
-for c in user["chats"]:
-    st.markdown(f"**Q:** {c['Q']}\n\n**A:** {c['A']}")
+# ----------------------------
+# CHAT HISTORY
+# ----------------------------
 
-# Upgrade Plans
+st.subheader("💬 Chat History")
+
+for c in user["chats"]:
+    st.markdown(f"**Q:** {c['Q']}")
+    st.markdown(f"**A:** {c['A']}")
+    st.markdown("---")
+
+# ----------------------------
+# UPGRADE PLAN
+# ----------------------------
+
 st.subheader("💎 Upgrade Plan")
+
 selected_plan = st.radio("Choose Plan", options=["Free", "Silver", "Gold"])
 plan_info = PLANS[selected_plan]
+
 st.write(f"Daily Chat Limit: {plan_info['daily_limit']}")
 st.write(f"Price per month: ₹{plan_info['price']}")
 
-# Razorpay subscription
 if plan_info["price"] > 0:
+
     if not (RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET):
         st.warning("⚠ Razorpay keys missing. Cannot subscribe!")
     else:
         import razorpay
-        client_razor = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        razor_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
         if st.button(f"Subscribe to {selected_plan} Plan"):
             try:
-                # Simplified: real subscription requires Razorpay plan creation
-                st.success(f"Subscription request for {selected_plan} sent! Complete payment in Razorpay dashboard.")
                 user["plan"] = selected_plan
                 save_users()
+                st.success(f"Subscription activated: {selected_plan}")
             except Exception as e:
                 st.error(f"Subscription Failed: {str(e)}")
 
-# Export
+# ----------------------------
+# EXPORT
+# ----------------------------
+
 st.subheader("💾 Export Data")
+
 if st.button("Download JSON"):
-    with open("export.json", "w") as f:
-        json.dump(user, f, indent=4)
-    st.success("User data exported as export.json")
+    st.download_button(
+        label="Download",
+        data=json.dumps(user, indent=4),
+        file_name="user_data.json",
+        mime="application/json"
+    )
