@@ -91,4 +91,16 @@ st.write(f"**Chats Used Today:** {user['chats_today']} / {PLANS[user['plan']]['d
 # ----------------------------
 
 st.subheader("📅 Habit Tracker")
-new_habit = st._
+
+# Get new habit input from user
+new_habit = st.text_input("Add New Habit")
+
+# Add habit to user's data if the button is clicked
+if st.button("Add Habit") and new_habit:
+    user["habits"].append(new_habit)
+    supabase.table("users").update({"habits": user["habits"]}).eq("email", email).execute()
+    st.experimental_rerun()  # refresh app to show updated habits
+
+# Display current habits
+for h in user["habits"]:
+    st.write(f"✔️ {h}")
