@@ -1,5 +1,6 @@
-.env
-.streamlit/secrets.toml
-users.json
-__pycache__/
+streamlit
+google-genai
+razorpay
+python-dotenv
+
 
