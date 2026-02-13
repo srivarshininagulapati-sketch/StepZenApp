@@ -1,8 +1,13 @@
-.streamlit/secrets.toml
-.streamlit/secrets.toml
-secrets.toml
+# Sensitive keys
 .env
-.streamlit/
+.streamlit/secrets.toml
+
+# Local app data
 users.json
 __pycache__/
 
+# Streamlit temp files
+.streamlit/
+
+# Others you don’t want to push
+.DS_Store
