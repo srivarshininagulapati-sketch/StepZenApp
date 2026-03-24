@@ -1,4 +1,5 @@
-streamlit
-supabase
-google-generativeai
-gtts
+streamlit==1.26.0
+supabase==1.0.3
+google-generativeai==0.4.2
+gtts==2.3.2
+razorpay==1.3.5
