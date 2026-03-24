@@ -151,13 +151,60 @@ if img:
 # ---------------- PLAN ----------------
 st.subheader("💳 Upgrade Plan")
 
+import razorpay
+
+# Razorpay client initialize
+client = razorpay.Client(auth=(st.secrets["RAZORPAY_KEY_ID"], st.secrets["RAZORPAY_KEY_SECRET"]))
+
+# Plan IDs mapping (already మీ దగ్గర ఉన్న Plan IDs)
+PLAN_IDS = {
+    "Silver": "plan_H1Xyz12345",  # మీ Razorpay Plan ID
+    "Gold": "plan_H1Xyz67890"
+}
+
+# User select box
 plan = st.selectbox("Choose Plan", ["Free", "Silver", "Gold"])
 
+# Upgrade Plan click
 if st.button("Upgrade Plan"):
-    supabase.table("users").update({"plan": plan}).eq("email", email).execute()
-    st.success(f"Plan updated to {plan}")
-    st.rerun()
+    if plan == "Free":
+        # Free plan select అయినా Supabase update
+        supabase.table("users").update({"plan": "Free"}).eq("email", email).execute()
+        st.success("Plan updated to Free")
+    else:
+        try:
+            # Razorpay subscription create
+            subscription = client.subscription.create({
+                "plan_id": PLAN_IDS[plan],
+                "customer_notify": 1,
+                "total_count": 12  # 12 months subscription
+            })
 
+            # Razorpay Checkout button show చేయడం
+            st.markdown(f"""
+            <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+            <button id="rzp-button">Pay Now</button>
+            <script>
+            var options = {{
+                "key": "{st.secrets['RAZORPAY_KEY_ID']}",
+                "subscription_id": "{subscription['id']}",
+                "handler": function (response) {{
+                    alert('Payment successful! Your plan is now active.');
+                    window.location.reload();
+                }}
+            }};
+            var rzp = new Razorpay(options);
+            document.getElementById('rzp-button').onclick = function(e){{
+                rzp.open();
+                e.preventDefault();
+            }}
+            </script>
+            """, unsafe_allow_html=True)
+
+            st.info("Click 'Pay Now' to complete your subscription payment.")
+
+        except Exception as e:
+            st.error(f"Payment error: {e}")
 # ---------------- ADMIN ----------------
 st.subheader("📊 Admin Dashboard")
 
