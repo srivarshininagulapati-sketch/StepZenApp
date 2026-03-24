@@ -2,178 +2,169 @@ import streamlit as st
 import datetime
 from supabase import create_client
 import google.generativeai as genai
-import razorpay
+from gtts import gTTS
 
-# ----------------------------
-# SECRETS (SAFE, LOCAL)
-# ----------------------------
+st.set_page_config(page_title="ZenChat AI", layout="wide")
+
+# ---------------- SECRETS ----------------
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-RAZORPAY_KEY_ID = st.secrets["RAZORPAY_KEY_ID"]
-RAZORPAY_KEY_SECRET = st.secrets["RAZORPAY_KEY_SECRET"]
 
-# ----------------------------
-# DATABASE
-# ----------------------------
+# ---------------- INIT ----------------
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ----------------------------
-# GOOGLE AI
-# ----------------------------
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# ----------------------------
-# RAZORPAY CLIENT
-# ----------------------------
-rz_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+# ---------------- AI PERSONALITY ----------------
+SYSTEM_PROMPT = """
+You are ZenChat AI 💚
+- Friendly
+- Smart
+- Helpful
+- Motivational
+- Talk like a human
+"""
 
-# ----------------------------
-# PLANS
-# ----------------------------
-PLANS = {
-    "Free": {"daily_limit": 20, "price": 0, "plan_SFBT9KT6xXg8Ua": None},
-    "Silver": {"daily_limit": 100, "price": 199, "plan_SFBUBSaO3jLhGL": "plan_silver"},
-    "Gold": {"daily_limit": 400, "price": 399, "plan_SFBVQIj73B3joe": "plan_gold"},
-}
+# ---------------- LOGIN ----------------
+st.sidebar.title("🔐 Login")
+email = st.sidebar.text_input("Enter Email")
 
-# ----------------------------
-# UI
-# ----------------------------
-st.title("Chatbot & Habit Tracker")
-st.markdown("Created by **Srivarshini Nagulapati 💖**")
-
-email = st.text_input("Enter your Email")
 if not email:
     st.stop()
 
-today = str(datetime.date.today())
+# ---------------- USER ----------------
+user_data = supabase.table("users").select("*").eq("email", email).execute()
 
-# ----------------------------
-# LOAD USER
-# ----------------------------
-response = supabase.table("users").select("*").eq("email", email).execute()
-
-if response.data:
-    user = response.data[0]
+if user_data.data:
+    user = user_data.data[0]
 else:
     user = {
         "email": email,
         "plan": "Free",
-        "chats_today": 0,
-        "last_chat_date": today,
-        "habits": [],
-        "chats": []
+        "habits": []
     }
     supabase.table("users").insert(user).execute()
 
-# Reset daily chats
-if user["last_chat_date"] != today:
-    user["chats_today"] = 0
-    user["last_chat_date"] = today
-    supabase.table("users").update({
-        "chats_today": 0,
-        "last_chat_date": today
-    }).eq("email", email).execute()
+# ---------------- SIDEBAR ----------------
+st.sidebar.subheader("💬 Chats")
 
-st.write(f"Current Plan: {user['plan']}")
-st.write(f"Chats Used Today: {user['chats_today']} / {PLANS[user['plan']]['daily_limit']}")
+sessions = supabase.table("chat_sessions").select("*").eq("user_id", email).execute()
 
-# ----------------------------
-# HABIT TRACKER
-# ----------------------------
+if st.sidebar.button("➕ New Chat"):
+    supabase.table("chat_sessions").insert({
+        "user_id": email,
+        "title": "New Chat"
+    }).execute()
+    st.rerun()
+
+selected_session = None
+
+for s in sessions.data:
+    col1, col2 = st.sidebar.columns([3,1])
+    if col1.button(s["title"], key=s["id"]):
+        selected_session = s["id"]
+    if col2.button("❌", key=f"del_s_{s['id']}"):
+        supabase.table("chat_sessions").delete().eq("id", s["id"]).execute()
+        st.rerun()
+
+# ---------------- UI ----------------
+st.title("🤖 ZenChat AI")
+st.markdown("Created by **Srivarshini 💖**")
+
+# ---------------- HABITS ----------------
 st.subheader("📅 Habit Tracker")
-new_habit = st.text_input("Add New Habit")
+
+new_habit = st.text_input("Add Habit")
+
 if st.button("Add Habit") and new_habit:
     user["habits"].append(new_habit)
     supabase.table("users").update({"habits": user["habits"]}).eq("email", email).execute()
-    st.experimental_rerun()
+    st.rerun()
 
 for i, h in enumerate(user["habits"]):
-    st.write(f"✔️ {h}")
-    if st.button(f"Delete", key=f"habit_del_{i}"):
+    col1, col2 = st.columns([4,1])
+    col1.write(f"✔️ {h}")
+    if col2.button("❌", key=f"h_{i}"):
         user["habits"].pop(i)
         supabase.table("users").update({"habits": user["habits"]}).eq("email", email).execute()
-        st.experimental_rerun()
+        st.rerun()
 
-# ----------------------------
-# AI CHAT
-# ----------------------------
-st.subheader("🤖 AI Chat")
-question = st.text_input("Ask something")
-if st.button("Send") and question:
-    if user["chats_today"] >= PLANS[user["plan"]]["daily_limit"]:
-        st.error("Daily chat limit reached. Upgrade plan.")
-    else:
-        try:
-            response = model.generate_content(question)
-            response_text = response.text
-        except Exception as e:
-            response_text = f"Error: {str(e)}"
+# ---------------- CHAT ----------------
+st.subheader("💬 Chat")
 
-        user["chats"].append({"Q": question, "A": response_text})
-        user["chats_today"] += 1
+if selected_session:
 
-        supabase.table("users").update({
-            "chats": user["chats"],
-            "chats_today": user["chats_today"]
-        }).eq("email", email).execute()
+    messages = supabase.table("messages").select("*").eq("session_id", selected_session).execute()
 
-        st.experimental_rerun()
+    for m in messages.data:
+        with st.chat_message(m["role"]):
+            st.write(m["content"])
 
-# ----------------------------
-# CHAT HISTORY
-# ----------------------------
-st.subheader("💬 Chat History")
-for i, c in enumerate(user["chats"]):
-    st.markdown(f"**Q:** {c['Q']}")
-    st.markdown(f"**A:** {c['A']}")
-    if st.button("Delete", key=f"chat_del_{i}"):
-        user["chats"].pop(i)
-        supabase.table("users").update({"chats": user["chats"]}).eq("email", email).execute()
-        st.experimental_rerun()
-    st.markdown("---")
+            if st.button("❌", key=f"msg_{m['id']}"):
+                supabase.table("messages").delete().eq("id", m["id"]).execute()
+                st.rerun()
 
-# ----------------------------
-# UPGRADE PLAN WITH RAZORPAY PAYMENT
-# ----------------------------
-st.subheader("💎 Upgrade Plan")
-selected_plan = st.radio("Choose Plan", ["Free", "Silver", "Gold"])
-plan_info = PLANS[selected_plan]
-st.write(f"Daily Chat Limit: {plan_info['daily_limit']}")
-st.write(f"Price per month: ₹{plan_info['price']}")
+    prompt = st.chat_input("Type message...")
 
-if st.button("Activate Plan"):
-    if plan_info["price"] == 0:
-        # Free plan
-        user["plan"] = "Free"
-        supabase.table("users").update({"plan": "Free"}).eq("email", email).execute()
-        st.success("Plan updated to Free")
-    else:
-        try:
-            # Razorpay subscription
-            subscription = rz_client.subscription.create({
-                "plan_id": plan_info["plan_id"],
-                "customer_notify": 1,
-                "total_count": 12
-            })
-            user["plan"] = selected_plan
-            supabase.table("users").update({"plan": selected_plan}).eq("email", email).execute()
-            st.success(f"Subscribed to {selected_plan}! Payment created successfully.")
-        except Exception as e:
-            st.error(f"Razorpay payment failed: {str(e)}")
+    if prompt:
+        supabase.table("messages").insert({
+            "session_id": selected_session,
+            "role": "user",
+            "content": prompt
+        }).execute()
 
-    st.experimental_rerun()
+        full_prompt = SYSTEM_PROMPT + "\nUser: " + prompt
 
-# ----------------------------
-# EXPORT DATA
-# ----------------------------
-st.subheader("💾 Export Data")
-if st.button("Download JSON"):
-    st.download_button(
-        label="Download",
-        data=str(user),
-        file_name="user_data.json",
-        mime="application/json"
-    )
+        res = model.generate_content(full_prompt)
+        ans = res.text
+
+        supabase.table("messages").insert({
+            "session_id": selected_session,
+            "role": "assistant",
+            "content": ans
+        }).execute()
+
+        # Voice
+        tts = gTTS(ans)
+        tts.save("voice.mp3")
+        audio = open("voice.mp3", "rb").read()
+        st.audio(audio)
+
+        st.rerun()
+
+# ---------------- IMAGE AI ----------------
+st.subheader("🖼️ Image AI")
+
+img = st.file_uploader("Upload Image")
+
+if img:
+    st.image(img)
+
+    if st.button("Analyze Image"):
+        response = model.generate_content([
+            "Explain this image",
+            img.getvalue()
+        ])
+        st.write(response.text)
+
+# ---------------- PLAN ----------------
+st.subheader("💳 Upgrade Plan")
+
+plan = st.selectbox("Choose Plan", ["Free", "Silver", "Gold"])
+
+if st.button("Upgrade Plan"):
+    supabase.table("users").update({"plan": plan}).eq("email", email).execute()
+    st.success(f"Plan updated to {plan}")
+    st.rerun()
+
+# ---------------- ADMIN ----------------
+st.subheader("📊 Admin Dashboard")
+
+users = supabase.table("users").select("*").execute().data
+
+total_users = len(users)
+paid_users = len([u for u in users if u["plan"] != "Free"])
+
+st.metric("👥 Users", total_users)
+st.metric("💎 Paid Users", paid_users)
