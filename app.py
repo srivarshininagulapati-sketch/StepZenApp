@@ -16,17 +16,18 @@ except ModuleNotFoundError:
 st.set_page_config(page_title="ZenChat AI", layout="wide")
 
 # ---------------- Secrets ----------------
-SUPABASE_URL = st.secrets["SUPABASE_URL"]  # REST endpoint
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 
-# ---------------- Init REST API functions ----------------
+# ---------------- Supabase headers ----------------
 headers = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json"
 }
 
+# ---------------- Supabase functions ----------------
 def supabase_get(table, filter_col=None, filter_val=None):
     url = f"{SUPABASE_URL}/{table}"
     if filter_col and filter_val:
@@ -49,15 +50,11 @@ def supabase_delete(table, filter_col, filter_val):
     r = requests.delete(url, headers=headers)
     return r.status_code
 
-# ---------------- Google AI init ----------------
+# ---------------- Google AI ----------------
 genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel("gemini-1.0-pro")
 
-# Step 1: List all available models (temporary)
-models = genai.list_models()
-st.write("Available models:", models)
-
-# For now, comment out the old model line
-# model = genai.GenerativeModel("gemini-1.5-flash") # ---------------- AI Personality ----------------
+# ---------------- AI Personality ----------------
 SYSTEM_PROMPT = """
 You are ZenChat AI 💚
 - Friendly
@@ -100,7 +97,7 @@ for s in sessions:
 
 # ---------------- Ensure session exists ----------------
 if not selected_session:
-    new_session = supabase_insert({"user_id": email, "title": "New Chat"}, "chat_sessions")
+    new_session = supabase_insert("chat_sessions", {"user_id": email, "title": "New Chat"})
     selected_session = new_session[0]["id"] if new_session else None
 
 # ---------------- UI ----------------
@@ -138,8 +135,13 @@ prompt = st.chat_input("Type message...")
 if prompt:
     supabase_insert("messages", {"session_id": selected_session, "role": "user", "content": prompt})
     full_prompt = SYSTEM_PROMPT + "\nUser: " + prompt
-    res = model.generate_content(full_prompt)
-    ans = res.text
+
+    try:
+        res = model.generate_content(full_prompt)
+        ans = res.text
+    except Exception as e:
+        ans = f"Error: {e}"
+
     supabase_insert("messages", {"session_id": selected_session, "role": "assistant", "content": ans})
 
     tts = gTTS(ans)
@@ -154,8 +156,11 @@ img = st.file_uploader("Upload Image")
 if img:
     st.image(img)
     if st.button("Analyze Image"):
-        response = model.generate_content([ "Explain this image", img.getvalue() ])
-        st.write(response.text)
+        try:
+            response = model.generate_content(["Explain this image", img.getvalue()])
+            st.write(response.text)
+        except Exception as e:
+            st.error(e)
 
 # ---------------- Plan System ----------------
 st.subheader("💳 Upgrade Plan")
@@ -168,8 +173,12 @@ if st.button("Upgrade Plan"):
         PLAN_IDS = {"Silver":"plan_SFBUBSaO3jLhGL","Gold":"plan_SFBVQIj73B3joe"}
         client = razorpay.Client(auth=(st.secrets["RAZORPAY_KEY_ID"], st.secrets["RAZORPAY_KEY_SECRET"]))
         try:
-            subscription = client.subscription.create({"plan_id": PLAN_IDS[plan],"customer_notify":1,"total_count":12})
-            st.info(f"Razorpay subscription created. ID: {subscription['id']}")
+            subscription = client.subscription.create({
+                "plan_id": PLAN_IDS[plan],
+                "customer_notify":1,
+                "total_count":12
+            })
+            st.info(f"Subscription created: {subscription['id']}")
         except Exception as e:
             st.error(f"Payment error: {e}")
 
